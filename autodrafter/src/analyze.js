@@ -42,14 +42,33 @@ Rules:
  * @param {object} opts { hint?: string, mock?: boolean }
  */
 export async function draftListing(photoPaths, opts = {}) {
-  if (opts.mock) return mockDraft(photoPaths, opts.hint);
+  if (opts.mock) return mockDraft(photoPaths.map((p) => path.basename(p)), opts.hint);
+  const images = photoPaths.map((p) => ({
+    media_type: MEDIA_TYPES[path.extname(p).toLowerCase()],
+    data: fs.readFileSync(p).toString("base64"),
+    name: path.basename(p),
+  }));
+  return draftFromImages(images, opts);
+}
+
+/**
+ * Same as draftListing but takes in-memory images (used by the web server).
+ * @param {{media_type: string, data: string, name?: string}[]} images base64 images
+ * @param {object} opts { hint?: string, mock?: boolean }
+ */
+export async function draftFromImages(images, opts = {}) {
+  const names = images.map((im, i) => im.name || `photo-${i + 1}`);
+  if (opts.mock) return mockDraft(names, opts.hint);
 
   const client = new Anthropic();
-  const content = photoPaths.map(imageBlock);
+  const content = images.map((im) => ({
+    type: "image",
+    source: { type: "base64", media_type: im.media_type, data: im.data },
+  }));
   content.push({
     type: "text",
     text:
-      `Create an eBay draft listing from these ${photoPaths.length} photos of one item.` +
+      `Create an eBay draft listing from these ${images.length} photos of one item.` +
       (opts.hint ? ` Seller's note about this item: ${opts.hint}` : ""),
   });
 
@@ -78,7 +97,7 @@ export async function draftListing(photoPaths, opts = {}) {
 
   draft._meta = {
     model: response.model,
-    photos: photoPaths.map((p) => path.basename(p)),
+    photos: names,
     usage: {
       input_tokens: response.usage.input_tokens,
       output_tokens: response.usage.output_tokens,
@@ -89,8 +108,8 @@ export async function draftListing(photoPaths, opts = {}) {
 }
 
 /** Offline stand-in so the pipeline can be tested without an API key. */
-function mockDraft(photoPaths, hint) {
-  const name = hint || path.basename(path.dirname(photoPaths[0]));
+function mockDraft(photoNames, hint) {
+  const name = hint || "item";
   return {
     title: `${name} (mock draft)`.slice(0, 80),
     condition: "Used - Good",
@@ -104,7 +123,7 @@ function mockDraft(photoPaths, hint) {
     confidence_notes: "Mock mode — no photos were analyzed.",
     _meta: {
       model: "mock",
-      photos: photoPaths.map((p) => path.basename(p)),
+      photos: photoNames,
       usage: { input_tokens: 0, output_tokens: 0 },
       generated_at: new Date().toISOString(),
     },

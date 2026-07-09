@@ -1,0 +1,129 @@
+#!/usr/bin/env node
+// Web UI for the eBay auto-drafter.
+//
+//   node src/server.js [--port 3000] [--mock]
+//
+// Open http://localhost:<port> on the desktop, or http://<computer-ip>:<port>
+// from a phone on the same Wi-Fi. No dependencies beyond the Anthropic SDK.
+//
+// NOTE: no authentication — run it on your home network only.
+
+import fs from "fs";
+import os from "os";
+import path from "path";
+import http from "http";
+import { fileURLToPath } from "url";
+import { draftFromImages } from "./analyze.js";
+import { draftsToCsv } from "./csv.js";
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const args = process.argv.slice(2);
+const PORT = Number(args[args.indexOf("--port") + 1]) || Number(process.env.PORT) || 3000;
+const MOCK_DEFAULT = args.includes("--mock");
+const OUT_DIR = path.resolve("drafts");
+
+const ALLOWED_MEDIA = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+const MAX_BODY = 60 * 1024 * 1024; // ~8 downscaled photos fits comfortably
+
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks = [];
+    req.on("data", (c) => {
+      size += c.length;
+      if (size > MAX_BODY) {
+        reject(Object.assign(new Error("Upload too large. Use fewer or smaller photos."), { status: 413 }));
+        req.destroy();
+        return;
+      }
+      chunks.push(c);
+    });
+    req.on("end", () => resolve(Buffer.concat(chunks)));
+    req.on("error", reject);
+  });
+}
+
+function json(res, status, obj) {
+  const body = JSON.stringify(obj);
+  res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
+  res.end(body);
+}
+
+function loadDrafts() {
+  if (!fs.existsSync(OUT_DIR)) return [];
+  return fs
+    .readdirSync(OUT_DIR)
+    .filter((f) => f.endsWith(".json"))
+    .map((f) => {
+      try {
+        return { item: f.replace(/\.json$/, ""), draft: JSON.parse(fs.readFileSync(path.join(OUT_DIR, f), "utf8")) };
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean)
+    .sort((a, b) => (b.draft._meta?.generated_at || "").localeCompare(a.draft._meta?.generated_at || ""));
+}
+
+async function handleDraft(req, res) {
+  const body = JSON.parse((await readBody(req)).toString("utf8"));
+  const name = String(body.name || "").trim() || "item";
+  const photos = Array.isArray(body.photos) ? body.photos.slice(0, 12) : [];
+  if (!photos.length) return json(res, 400, { error: "No photos provided." });
+  for (const p of photos) {
+    if (!ALLOWED_MEDIA.has(p.media_type) || typeof p.data !== "string") {
+      return json(res, 400, { error: "Unsupported photo format." });
+    }
+  }
+  const mock = MOCK_DEFAULT || body.mock === true || !process.env.ANTHROPIC_API_KEY;
+
+  const draft = await draftFromImages(
+    photos.map((p, i) => ({ media_type: p.media_type, data: p.data, name: p.name || `photo-${i + 1}` })),
+    { hint: name, mock },
+  );
+
+  fs.mkdirSync(OUT_DIR, { recursive: true });
+  const safe = name.replace(/[^\w\- ]+/g, "_") || "item";
+  fs.writeFileSync(path.join(OUT_DIR, `${safe}.json`), JSON.stringify(draft, null, 2));
+  json(res, 200, { item: safe, mock, draft });
+}
+
+const server = http.createServer(async (req, res) => {
+  try {
+    const url = new URL(req.url, "http://x");
+    if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.end(fs.readFileSync(path.join(here, "..", "public", "index.html")));
+    } else if (req.method === "GET" && url.pathname === "/api/status") {
+      json(res, 200, { hasApiKey: Boolean(process.env.ANTHROPIC_API_KEY), mockDefault: MOCK_DEFAULT });
+    } else if (req.method === "GET" && url.pathname === "/api/drafts") {
+      json(res, 200, { drafts: loadDrafts() });
+    } else if (req.method === "GET" && url.pathname === "/api/drafts.csv") {
+      res.writeHead(200, {
+        "content-type": "text/csv; charset=utf-8",
+        "content-disposition": "attachment; filename=drafts.csv",
+      });
+      res.end(draftsToCsv(loadDrafts()));
+    } else if (req.method === "POST" && url.pathname === "/api/draft") {
+      await handleDraft(req, res);
+    } else {
+      json(res, 404, { error: "Not found" });
+    }
+  } catch (err) {
+    console.error(err);
+    if (!res.headersSent) json(res, err.status || 500, { error: err.message });
+  }
+});
+
+server.listen(PORT, "0.0.0.0", () => {
+  const nets = Object.values(os.networkInterfaces())
+    .flat()
+    .filter((n) => n && n.family === "IPv4" && !n.internal)
+    .map((n) => n.address);
+  console.log(`eBay Auto-Drafter running${MOCK_DEFAULT ? " (mock mode)" : ""}:`);
+  console.log(`  This computer:  http://localhost:${PORT}`);
+  for (const ip of nets) console.log(`  Phone (same Wi-Fi): http://${ip}:${PORT}`);
+  if (!process.env.ANTHROPIC_API_KEY && !MOCK_DEFAULT) {
+    console.log("  WARNING: ANTHROPIC_API_KEY not set — drafts will run in mock mode.");
+  }
+});

@@ -16,7 +16,26 @@ You take the photos; this tool writes the title, condition, category, item speci
    export ANTHROPIC_API_KEY=sk-ant-...
    ```
 
-## Daily workflow
+## Use it from your phone (web app)
+
+Start the web app on any computer at home:
+
+```sh
+npm run serve
+```
+
+It prints two addresses:
+
+- **This computer:** `http://localhost:3000` — open in any desktop browser
+- **Phone (same Wi-Fi):** `http://192.168.x.x:3000` — open in Brave/Chrome on your phone
+
+On the phone: type the item name, tap **Add photos** (opens the camera or gallery), tap **Create draft**. Photos are downscaled in the browser before upload, drafts are saved on the computer, and the **Download CSV** link gives you the review spreadsheet.
+
+To try the UI without an API key: `npm run serve:mock`.
+
+> The server has no login — only run it on your home Wi-Fi, don't expose the port to the internet.
+
+## Daily workflow (CLI, batch mode)
 
 1. Make one folder per item and drop that item's photos in it. Name the folder what you'd call the item — the name is given to the AI as a hint:
 
