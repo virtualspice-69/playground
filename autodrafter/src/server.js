@@ -15,6 +15,8 @@ import http from "http";
 import { fileURLToPath } from "url";
 import { draftFromImages } from "./analyze.js";
 import { draftsToCsv } from "./csv.js";
+import * as auth from "./auth.js";
+import * as google from "./google.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -97,42 +99,171 @@ function safeName(name) {
   return String(name).replace(/[^\w\- ]+/g, "_").trim() || "item";
 }
 
+function originOf(req) {
+  const proto = req.headers["x-forwarded-proto"] || "http";
+  return `${proto}://${req.headers.host}`;
+}
+function redirect(res, location) {
+  res.writeHead(302, { location });
+  res.end();
+}
+
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, "http://x");
-    if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
+    const p = url.pathname;
+    const user = auth.userFromCookies(req.headers.cookie);
+    const requireUser = () => {
+      if (!user) {
+        json(res, 401, { error: "Please sign in." });
+        return false;
+      }
+      return true;
+    };
+
+    /* ---- public pages ---- */
+    if (req.method === "GET" && (p === "/" || p === "/index.html")) {
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
-      res.end(fs.readFileSync(path.join(here, "..", "public", "index.html")));
-    } else if (req.method === "GET" && url.pathname === "/api/status") {
-      json(res, 200, { hasApiKey: Boolean(process.env.ANTHROPIC_API_KEY), mockDefault: MOCK_DEFAULT });
-    } else if (req.method === "GET" && url.pathname === "/api/drafts") {
-      json(res, 200, { drafts: loadDrafts() });
-    } else if (req.method === "GET" && url.pathname === "/api/drafts.csv") {
+      return res.end(fs.readFileSync(path.join(here, "..", "public", "index.html")));
+    }
+    if (req.method === "GET" && p === "/confirm") {
+      const result = auth.confirm(url.searchParams.get("token"));
+      const msg = result.ok
+        ? "Email confirmed — you can sign in now."
+        : result.error;
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      return res.end(confirmPage(msg, result.ok));
+    }
+
+    /* ---- auth API ---- */
+    if (req.method === "GET" && p === "/api/session") {
+      return json(res, 200, {
+        authenticated: Boolean(user),
+        email: user?.email || null,
+        hasApiKey: Boolean(process.env.ANTHROPIC_API_KEY),
+        mockDefault: MOCK_DEFAULT,
+        google: user ? google.connectionStatus(user.id) : { configured: google.googleConfigured(), photos: false, drive: false },
+      });
+    }
+    if (req.method === "GET" && p === "/api/captcha") {
+      return json(res, 200, auth.makeCaptcha());
+    }
+    if (req.method === "POST" && p === "/api/register") {
+      const body = JSON.parse((await readBody(req)).toString("utf8"));
+      if (!auth.verifyCaptcha(body.captchaToken, body.captchaAnswer)) {
+        return json(res, 400, { error: "Captcha answer is wrong. Try the new one." });
+      }
+      const r = auth.register({ email: body.email, password: body.password });
+      if (!r.ok) return json(res, 400, { error: r.error });
+      const link = auth.confirmationLink(originOf(req), r.confirmToken);
+      console.log(`\n[confirm] ${r.email}: ${link}\n`);
+      // No email provider configured -> return the link so the UI can show it.
+      return json(res, 200, { ok: true, email: r.email, confirmLink: link, emailed: false });
+    }
+    if (req.method === "POST" && p === "/api/login") {
+      const body = JSON.parse((await readBody(req)).toString("utf8"));
+      const r = auth.login({ email: body.email, password: body.password });
+      if (!r.ok) return json(res, 401, { error: r.error, needsConfirm: r.needsConfirm || false });
+      res.setHeader("set-cookie", auth.createSessionCookie(r.user.id, Boolean(body.remember)));
+      return json(res, 200, { ok: true, email: r.user.email });
+    }
+    if (req.method === "POST" && p === "/api/logout") {
+      res.setHeader("set-cookie", auth.clearSessionCookie());
+      return json(res, 200, { ok: true });
+    }
+
+    /* ---- Google OAuth ---- */
+    if (req.method === "GET" && (p === "/auth/google/photos" || p === "/auth/google/drive")) {
+      if (!requireUser()) return;
+      if (!google.googleConfigured()) return json(res, 503, { error: "Google isn't set up on this server yet." });
+      const service = p.endsWith("photos") ? "photos" : "drive";
+      return redirect(res, google.authUrl(service, originOf(req), user.id));
+    }
+    if (req.method === "GET" && p === "/auth/google/callback") {
+      const state = google.readState(url.searchParams.get("state"));
+      const code = url.searchParams.get("code");
+      if (!state || !code) return redirect(res, "/?google=error");
+      try {
+        await google.exchangeCode(code, state.service, state.userId, originOf(req));
+        return redirect(res, `/?google=${state.service}`);
+      } catch (e) {
+        console.error(e);
+        return redirect(res, "/?google=error");
+      }
+    }
+    if (req.method === "POST" && p === "/api/google/disconnect") {
+      if (!requireUser()) return;
+      const body = JSON.parse((await readBody(req)).toString("utf8"));
+      google.disconnect(user.id, body.service === "drive" ? "drive" : "photos");
+      return json(res, 200, { ok: true });
+    }
+    if (req.method === "GET" && p === "/api/google/photos") {
+      if (!requireUser()) return;
+      return json(res, 200, { items: await google.listPhotos(user.id) });
+    }
+    if (req.method === "GET" && p === "/api/google/drive") {
+      if (!requireUser()) return;
+      return json(res, 200, { items: await google.listDriveImages(user.id) });
+    }
+    if (req.method === "POST" && p === "/api/google/import") {
+      if (!requireUser()) return;
+      const body = JSON.parse((await readBody(req)).toString("utf8"));
+      const img =
+        body.source === "drive"
+          ? await google.fetchDriveImage(user.id, body.id)
+          : await google.fetchPhoto(user.id, body.baseUrl);
+      return json(res, 200, img);
+    }
+
+    /* ---- drafting API (requires sign-in) ---- */
+    if (req.method === "GET" && p === "/api/status") {
+      return json(res, 200, { hasApiKey: Boolean(process.env.ANTHROPIC_API_KEY), mockDefault: MOCK_DEFAULT });
+    }
+    if (req.method === "GET" && p === "/api/drafts") {
+      if (!requireUser()) return;
+      return json(res, 200, { drafts: loadDrafts() });
+    }
+    if (req.method === "GET" && p === "/api/drafts.csv") {
+      if (!requireUser()) return;
       res.writeHead(200, {
         "content-type": "text/csv; charset=utf-8",
         "content-disposition": "attachment; filename=drafts.csv",
       });
-      res.end(draftsToCsv(loadDrafts()));
-    } else if (req.method === "POST" && url.pathname === "/api/draft") {
-      await handleDraft(req, res);
-    } else if (req.method === "DELETE" && url.pathname.startsWith("/api/drafts/")) {
+      return res.end(draftsToCsv(loadDrafts()));
+    }
+    if (req.method === "POST" && p === "/api/draft") {
+      if (!requireUser()) return;
+      return await handleDraft(req, res);
+    }
+    if (req.method === "DELETE" && p.startsWith("/api/drafts/")) {
+      if (!requireUser()) return;
       // safeName() strips any path characters, so this can't escape OUT_DIR.
-      const item = safeName(decodeURIComponent(url.pathname.slice("/api/drafts/".length)));
+      const item = safeName(decodeURIComponent(p.slice("/api/drafts/".length)));
       const file = path.join(OUT_DIR, `${item}.json`);
       if (fs.existsSync(file)) {
         fs.unlinkSync(file);
-        json(res, 200, { deleted: item });
-      } else {
-        json(res, 404, { error: "Draft not found." });
+        return json(res, 200, { deleted: item });
       }
-    } else {
-      json(res, 404, { error: "Not found" });
+      return json(res, 404, { error: "Draft not found." });
     }
+
+    json(res, 404, { error: "Not found" });
   } catch (err) {
     console.error(err);
     if (!res.headersSent) json(res, err.status || 500, { error: err.message });
   }
 });
+
+function confirmPage(message, ok) {
+  return `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Email confirmation</title>
+<body style="margin:0;font:16px system-ui,sans-serif;background:#f1f3ef;color:#20262a;display:grid;place-items:center;height:100vh">
+<div style="background:#fff;border:1px solid #e0e4de;border-radius:16px;padding:32px;max-width:360px;text-align:center">
+<div style="font-size:40px">${ok ? "✅" : "⚠️"}</div>
+<p style="font-size:17px;line-height:1.5">${message}</p>
+<a href="/" style="display:inline-block;margin-top:8px;background:#0b6e4f;color:#f4faf7;text-decoration:none;padding:12px 22px;border-radius:12px;font-weight:700">Open the app</a>
+</div></body>`;
+}
 
 server.listen(PORT, "0.0.0.0", () => {
   const nets = Object.values(os.networkInterfaces())

@@ -16,6 +16,36 @@ You take the photos; this tool writes the title, condition, category, item speci
    export ANTHROPIC_API_KEY=sk-ant-...
    ```
 
+## Accounts
+
+The web app opens to a sign-up / sign-in screen, like a real auto-lister:
+
+- **Create account** with email + password (min 8 chars) and a quick human-check captcha.
+- **Confirm your email** — a confirmation link is generated. With no email service configured, the link is shown on screen and printed to the server console; click it to activate the account. (Disposable/throwaway email domains are blocked, and you can't sign in until confirmed.)
+- **Sign in** with "Keep me signed in" for auto-login next time.
+
+Accounts and drafts are stored locally in the `data/` and `drafts/` folders (never committed). Passwords are hashed with scrypt; sessions use signed cookies.
+
+> **Sending real confirmation emails** (needed if others will sign up): plug an email provider into `sendConfirmationEmail` in `src/auth.js` — e.g. add `nodemailer` and your SMTP credentials. Until then, the on-screen link works for you and anyone you set up by hand.
+
+## Connect Google Photos & Drive
+
+The first screen has **Google Photos** and **Google Drive** buttons so you can pull item photos straight from your Google account. This needs a free Google Cloud OAuth app — only you can create it:
+
+1. Go to <https://console.cloud.google.com>, create a project.
+2. **APIs & Services → Enable APIs**: enable **Google Photos Library API** and **Google Drive API**.
+3. **OAuth consent screen**: set it up (External), add yourself as a test user.
+4. **Credentials → Create OAuth client ID → Web application**. Under *Authorized redirect URIs* add:
+   `http://localhost:3000/auth/google/callback` (match your port).
+5. Copy the **Client ID** and **Client secret** and start the server with them:
+   ```sh
+   GOOGLE_CLIENT_ID=xxx GOOGLE_CLIENT_SECRET=yyy ANTHROPIC_API_KEY=sk-ant-... npm run serve
+   ```
+
+Now the buttons connect; tap one to pick recent photos and import them into a draft.
+
+> Google's OAuth requires `localhost` or an `https://` domain for the redirect — so **Google connect works from the desktop browser at `localhost`**, or from your phone once the app is deployed on a real `https://` domain. Over a plain `http://192.168.x.x` LAN address Google will refuse the redirect (this is Google's rule, not the app's). Photos added directly from the phone camera work over LAN regardless.
+
 ## Use it from your phone (web app)
 
 Start the web app on any computer at home:
