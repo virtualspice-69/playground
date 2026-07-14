@@ -7,9 +7,10 @@
     "autodraft": "src/cli.js"
   },
   "scripts": {
-    "start": "node src/cli.js",
+    "start": "node src/server.js",
     "serve": "node src/server.js",
-    "serve:mock": "node src/server.js --mock"
+    "serve:mock": "node src/server.js --mock",
+    "cli": "node src/cli.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0"

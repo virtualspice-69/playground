@@ -16,6 +16,20 @@ You take the photos; this tool writes the title, condition, category, item speci
    export ANTHROPIC_API_KEY=sk-ant-...
    ```
 
+## Put it on the web (Render)
+
+This gets you a real `https://` address you can open from any phone, and lets sign-ups and Google connect work from anywhere. All in a browser — no computer needed.
+
+1. Go to <https://render.com> and sign up (free) — you can sign in with GitHub.
+2. Click **New +** → **Blueprint**.
+3. Connect your GitHub and pick the **playground** repo, branch `claude/ebay-listing-automation-vog6mt`. Render reads `render.yaml` and sets up the web service automatically.
+4. Click **Apply**. When it asks for environment variables, paste your **ANTHROPIC_API_KEY** (from <https://platform.claude.com>). Leave the Google keys blank for now.
+5. Wait a couple minutes for the first deploy. Render gives you a URL like `https://ebay-autodrafter.onrender.com` — that's your app. Open it on your Pixel.
+
+**To make the Google Photos/Drive buttons work on the live site:** in the Google Cloud console (see next section), add your Render URL as an authorized redirect URI — `https://YOUR-APP.onrender.com/auth/google/callback` — then paste `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` into Render's Environment settings.
+
+> **Free-tier note:** the free plan sleeps after ~15 minutes idle and its storage resets on sleep/redeploy — great for playing and fine-tuning, but accounts and drafts won't stick around long-term yet. Making the data permanent (a small database) is the recommended next step once you've had a play.
+
 ## Accounts
 
 The web app opens to a sign-up / sign-in screen, like a real auto-lister:
