@@ -1,0 +1,21 @@
+{
+  "name": "ebay-autodrafter",
+  "version": "0.1.0",
+  "description": "Turn item photos into eBay draft listings using Claude vision",
+  "type": "module",
+  "bin": {
+    "autodraft": "src/cli.js"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "serve": "node src/server.js",
+    "serve:mock": "node src/server.js --mock",
+    "cli": "node src/cli.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.110.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
