@@ -4,3 +4,4 @@ __pycache__/
 venv/
 .venv/
 assets/templates/manifest.json
+art_lab_output/
