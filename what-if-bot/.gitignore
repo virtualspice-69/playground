@@ -5,3 +5,5 @@ venv/
 .venv/
 assets/templates/manifest.json
 art_lab_output/
+android/build/
+android/assets/studio.html

@@ -336,7 +336,10 @@ function tile(scene,key,seed,w,h,model){
     img.onload=()=>{img.classList.add('in');l.remove();};
     img.src=url(scene,s,w,h,model);
   };
-  f.querySelector('.dl').onclick=()=>window.open(src,'_blank');
+  f.querySelector('.dl').onclick=()=>{
+    if(window.IFBridge&&IFBridge.openUrl) IFBridge.openUrl(src);
+    else window.open(src,'_blank');
+  };
   return f;
 }
 
@@ -401,7 +404,11 @@ function paint(){
     <span class="sc">${c}</span></div>`).join('');
 }
 $('#dl').onclick=()=>{
-  const blob=new Blob([JSON.stringify(T,null,2)],{type:'application/json'});
+  const json=JSON.stringify(T,null,2);
+  // In the Android shell a blob download has nowhere to land, so hand the
+  // text to the native side instead.
+  if(window.IFBridge&&IFBridge.saveText){IFBridge.saveText('taste.json',json);return;}
+  const blob=new Blob([json],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob); a.download='taste.json'; a.click();
 };
