@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>$IF Studio</title>
+<style>
+:root{
+  --bg:#070a07; --panel:#0d120d; --line:#1a241a; --line-hi:#2a3a2a;
+  --ink:#e6f2e6; --dim:#7d907d; --faint:#4d5c4d;
+  --acc:#4ade80; --acc-dim:#22c55e; --gold:#d4b062;
+  --r:14px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--bg); color:var(--ink);
+  font:15px/1.5 -apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif;
+  -webkit-font-smoothing:antialiased; display:flex; flex-direction:column;
+}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:none}
+
+/* ---------- chrome ---------- */
+header{
+  display:flex;align-items:center;gap:20px;
+  padding:18px 28px;border-bottom:1px solid var(--line);
+  position:sticky;top:0;background:rgba(7,10,7,.86);backdrop-filter:blur(12px);z-index:20;
+}
+.brand{display:flex;align-items:baseline;gap:10px;margin-right:auto}
+.brand h1{font-size:17px;font-weight:650;letter-spacing:-.02em}
+.brand h1 span{color:var(--acc)}
+.brand em{font-style:normal;font-size:12px;color:var(--faint);letter-spacing:.14em;text-transform:uppercase}
+
+nav{display:flex;gap:2px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:3px}
+nav button{
+  padding:7px 16px;border-radius:7px;font-size:13.5px;font-weight:520;color:var(--dim);
+  transition:.15s;
+}
+nav button:hover{color:var(--ink)}
+nav button[data-on]{background:var(--line);color:var(--ink)}
+
+main{flex:1;display:flex;flex-direction:column;padding:28px;gap:24px;max-width:1400px;width:100%;margin:0 auto}
+.view{display:none;flex-direction:column;gap:24px;flex:1}
+.view[data-on]{display:flex}
+
+/* ---------- composer ---------- */
+.composer{
+  background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+  padding:20px;display:flex;flex-direction:column;gap:16px;
+}
+.field{display:flex;gap:12px;align-items:flex-start}
+textarea{
+  flex:1;background:#0a0f0a;border:1px solid var(--line);border-radius:10px;
+  padding:14px 16px;resize:none;min-height:58px;line-height:1.45;
+  transition:border-color .15s;
+}
+textarea:focus{outline:none;border-color:var(--line-hi)}
+textarea::placeholder{color:var(--faint)}
+
+.go{
+  background:var(--acc);color:#052e14;font-weight:640;font-size:14px;
+  padding:0 28px;border-radius:10px;min-height:58px;white-space:nowrap;
+  transition:.15s;letter-spacing:-.01em;
+}
+.go:hover{background:#5ceb90}
+.go:disabled{background:var(--line);color:var(--faint);cursor:default}
+
+.chips{display:flex;flex-wrap:wrap;gap:7px}
+.chip{
+  padding:6px 13px;border-radius:20px;font-size:12.5px;color:var(--dim);
+  border:1px solid var(--line);transition:.15s;white-space:nowrap;
+}
+.chip:hover{border-color:var(--line-hi);color:var(--ink)}
+.chip[data-on]{background:rgba(74,222,128,.09);border-color:rgba(74,222,128,.4);color:var(--acc)}
+
+.opts{display:flex;gap:22px;align-items:center;flex-wrap:wrap;
+  padding-top:14px;border-top:1px solid var(--line)}
+.opt{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--dim)}
+.opt select{
+  background:#0a0f0a;border:1px solid var(--line);border-radius:8px;
+  padding:6px 10px;font-size:12.5px;cursor:pointer;
+}
+.opt select:focus{outline:none;border-color:var(--line-hi)}
+
+/* ---------- grid ---------- */
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fill,minmax(290px,1fr))}
+figure{
+  background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+  overflow:hidden;position:relative;transition:.2s;
+}
+figure:hover{border-color:var(--line-hi)}
+.shot{position:relative;aspect-ratio:1;background:#0a0f0a;overflow:hidden}
+.shot img{width:100%;height:100%;object-fit:cover;display:block;opacity:0;transition:opacity .45s}
+.shot img.in{opacity:1}
+.load{
+  position:absolute;inset:0;display:grid;place-items:center;
+  font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);
+}
+.load::after{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(100deg,transparent 20%,rgba(74,222,128,.05) 50%,transparent 80%);
+  animation:sweep 1.7s infinite;
+}
+@keyframes sweep{to{transform:translateX(100%)}}
+figcaption{padding:11px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.tag{font-size:12.5px;font-weight:560;color:var(--acc);text-transform:capitalize}
+.acts{display:flex;gap:4px}
+.acts button{
+  width:28px;height:28px;border-radius:7px;color:var(--faint);
+  display:grid;place-items:center;font-size:13px;transition:.15s;
+}
+.acts button:hover{background:var(--line);color:var(--ink)}
+.acts button.keep[data-on]{color:var(--gold)}
+
+/* ---------- duel ---------- */
+.duel{display:flex;flex-direction:column;gap:20px;flex:1}
+.duel-head{text-align:center;padding:6px 0}
+.duel-head h2{font-size:19px;font-weight:600;letter-spacing:-.02em;margin-bottom:5px}
+.duel-head p{color:var(--dim);font-size:13.5px}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.pick{
+  background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+  overflow:hidden;cursor:pointer;transition:.18s;position:relative;
+}
+.pick:hover{border-color:var(--acc);transform:translateY(-2px)}
+.pick .shot{aspect-ratio:1}
+.pick .lbl{
+  padding:12px;text-align:center;font-size:12.5px;font-weight:560;
+  color:var(--dim);transition:.18s;
+}
+.pick:hover .lbl{color:var(--acc)}
+.duel-foot{display:flex;justify-content:center;gap:10px}
+.ghost{
+  padding:9px 20px;border:1px solid var(--line);border-radius:9px;
+  font-size:13px;color:var(--dim);transition:.15s;
+}
+.ghost:hover{border-color:var(--line-hi);color:var(--ink)}
+
+/* ---------- stats ---------- */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:18px}
+.stat .n{font-size:27px;font-weight:640;letter-spacing:-.03em;line-height:1}
+.stat .k{font-size:11.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.1em;margin-top:7px}
+.board{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.board h3{font-size:13px;font-weight:600;padding:15px 18px;border-bottom:1px solid var(--line);
+  letter-spacing:.04em;text-transform:uppercase;color:var(--dim)}
+.row{display:flex;align-items:center;gap:14px;padding:12px 18px;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:none}
+.row .nm{width:130px;font-size:13.5px;text-transform:capitalize;flex-shrink:0}
+.bar{flex:1;height:6px;background:#0a0f0a;border-radius:3px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--acc);border-radius:3px;transition:width .5s}
+.row .sc{width:64px;text-align:right;font-size:12.5px;color:var(--dim);
+  font-family:ui-monospace,monospace;flex-shrink:0}
+
+.empty{text-align:center;padding:70px 20px;color:var(--faint);font-size:14px}
+.note{font-size:12.5px;color:var(--faint);line-height:1.6}
+.note code{background:var(--panel);padding:2px 6px;border-radius:5px;font-size:11.5px}
+
+@media(max-width:720px){
+  header{padding:14px 16px;flex-wrap:wrap}
+  main{padding:16px}
+  .field{flex-direction:column}
+  .go{width:100%;min-height:48px}
+  .pair{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand"><h1>What <span>$IF</span></h1><em>Studio</em></div>
+  <nav>
+    <button data-tab="make" data-on>Generate</button>
+    <button data-tab="duel">Train</button>
+    <button data-tab="data">Taste</button>
+  </nav>
+</header>
+
+<main>
+
+  <!-- GENERATE -->
+  <section class="view" data-view="make" data-on>
+    <div class="composer">
+      <div class="field">
+        <textarea id="q" placeholder="Describe the scene — $IF is added automatically. e.g. crashing through a bank vault door"></textarea>
+        <button class="go" id="run">Generate</button>
+      </div>
+      <div class="chips" id="scenes"></div>
+      <div class="opts">
+        <label class="opt">Count
+          <select id="n"><option>1</option><option selected>4</option><option>8</option><option>12</option></select>
+        </label>
+        <label class="opt">Format
+          <select id="ar">
+            <option value="1024x1024" selected>Square</option>
+            <option value="1344x768">Wide</option>
+            <option value="768x1344">Tall</option>
+          </select>
+        </label>
+        <label class="opt">Engine
+          <select id="model">
+            <option value="flux" selected>FLUX — best quality</option>
+            <option value="turbo">Turbo — fastest</option>
+          </select>
+        </label>
+      </div>
+    </div>
+    <div class="grid" id="out"></div>
+  </section>
+
+  <!-- TRAIN -->
+  <section class="view" data-view="duel">
+    <div class="duel">
+      <div class="duel-head">
+        <h2>Which $IF is better?</h2>
+        <p>Pick the stronger render. Every choice sharpens the house style.</p>
+      </div>
+      <div class="pair" id="pair"></div>
+      <div class="duel-foot">
+        <button class="ghost" id="skip">Neither — skip</button>
+        <button class="ghost" id="fresh">New pair</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- TASTE -->
+  <section class="view" data-view="data">
+    <div class="stats" id="stats"></div>
+    <div class="board">
+      <h3>Scene ranking</h3>
+      <div id="board"></div>
+    </div>
+    <div class="board">
+      <h3>Export</h3>
+      <div style="padding:18px;display:flex;flex-direction:column;gap:14px">
+        <p class="note">Send this file back to Claude to retune <code>CHARACTER_PROMPT</code> from your actual picks.</p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="ghost" id="dl">Download taste.json</button>
+          <button class="ghost" id="wipe">Reset</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+const CHAR = "$IF, a single male cosmic entity: completely bald and hairless with no eyebrows, "
+  + "smooth polished emerald green skin with a glossy metallic sheen and bright specular highlights, "
+  + "lean powerful anatomically defined musculature, strong angular jaw, heavy brow, "
+  + "piercing glowing white eyes, calm and menacing expression, solo character, "
+  + "comic book illustration with bold confident inked linework, cel shaded with deep black shadows, "
+  + "high contrast, vivid saturated color, rim lighting in neon green, cinematic composition, "
+  + "masterpiece quality";
+
+const NEG = "hair, beard, eyebrows, multiple characters, sidekick, extra people, crowd, "
+  + "deformed hands, extra fingers, extra limbs, mutated anatomy, blurry, low contrast, "
+  + "washed out, dull colors, watermark, signature, text artifacts, ugly, amateur";
+
+const SCENES = {
+  portrait:"heroic head and shoulders portrait facing the viewer, deep space nebula behind him, dramatic rim lighting carving out his jaw and skull, iconic character key art",
+  surfer:"riding a sleek glowing board through deep space, body low and balanced, trailing a comet tail of green energy, galaxies all around, epic full body wide shot",
+  throne:"seated on a massive obsidian throne carved with glowing green sigils, monumental low angle shot, shafts of light from above",
+  moon:"planting a flag bearing a glowing dollar sign IF emblem on the surface of the moon, earth in the starry sky behind him, epic cinematic wide shot",
+  gold:"standing atop a mountain of glowing gold coins during a lightning storm, holding a tattered flag with a glowing IF emblem, comic book cover composition",
+  boss:"in a white dress shirt and dark tie holding a vintage red telephone to his ear, cigar smoke curling, city skyline through the window at night",
+  desk:"before a wall of monitors showing surging green candlestick charts, arms folded, calm and unbothered, neon city lights behind him",
+  ring:"as a boxer in a neon lit ring mid punch, dollar sign IF on his shorts, roaring crowd blurred behind him, dynamic angle",
+  jet:"in a crisp white shirt smoking a cigar in the cabin of a private jet, city skyline glowing through the window at night"
+};
+
+const K='if.taste.v1';
+let T = JSON.parse(localStorage.getItem(K) || '{"duels":[],"kept":[],"scene":{}}');
+const save=()=>localStorage.setItem(K,JSON.stringify(T));
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+
+function url(scene,seed,w,h,model){
+  const p = encodeURIComponent(`${CHAR}, ${scene} | negative: ${NEG}`);
+  return `https://image.pollinations.ai/prompt/${p}?width=${w}&height=${h}&seed=${seed}&model=${model}&nologo=true&enhance=true`;
+}
+const rnd=()=>Math.floor(Math.random()*2e9);
+
+/* tabs */
+$$('nav button').forEach(b=>b.onclick=()=>{
+  $$('nav button').forEach(x=>x.removeAttribute('data-on'));
+  b.setAttribute('data-on','');
+  $$('.view').forEach(v=>v.removeAttribute('data-on'));
+  $(`[data-view="${b.dataset.tab}"]`).setAttribute('data-on','');
+  if(b.dataset.tab==='duel' && !$('#pair').children.length) duel();
+  if(b.dataset.tab==='data') paint();
+});
+
+/* scene chips */
+let active=null;
+const chips=$('#scenes');
+Object.keys(SCENES).forEach(k=>{
+  const b=document.createElement('button');
+  b.className='chip'; b.textContent=k; b.dataset.k=k;
+  b.onclick=()=>{
+    if(active===k){active=null;b.removeAttribute('data-on');}
+    else{
+      $$('.chip').forEach(c=>c.removeAttribute('data-on'));
+      active=k; b.setAttribute('data-on','');
+    }
+  };
+  chips.appendChild(b);
+});
+
+/* tile */
+function tile(scene,key,seed,w,h,model){
+  const f=document.createElement('figure');
+  f.innerHTML=`<div class="shot"><div class="load">rendering</div><img alt="${key}"></div>
+    <figcaption><span class="tag">${key}</span>
+    <span class="acts">
+      <button class="keep" title="Keep">★</button>
+      <button class="re" title="Reroll">↻</button>
+      <button class="dl" title="Open full size">↗</button>
+    </span></figcaption>`;
+  const img=f.querySelector('img'), ld=f.querySelector('.load');
+  const src=url(scene,seed,w,h,model);
+  img.onload=()=>{img.classList.add('in');ld.remove();};
+  img.onerror=()=>{ld.textContent='failed';};
+  img.src=src;
+
+  f.querySelector('.keep').onclick=e=>{
+    const on=e.target.hasAttribute('data-on');
+    if(on){e.target.removeAttribute('data-on');T.kept=T.kept.filter(x=>x.seed!==seed);}
+    else{e.target.setAttribute('data-on','');T.kept.push({scene:key,seed,src});}
+    save();
+  };
+  f.querySelector('.re').onclick=()=>{
+    const s=rnd(); img.classList.remove('in');
+    const l=document.createElement('div'); l.className='load'; l.textContent='rendering';
+    f.querySelector('.shot').appendChild(l);
+    img.onload=()=>{img.classList.add('in');l.remove();};
+    img.src=url(scene,s,w,h,model);
+  };
+  f.querySelector('.dl').onclick=()=>window.open(src,'_blank');
+  return f;
+}
+
+/* generate */
+$('#run').onclick=()=>{
+  const custom=$('#q').value.trim();
+  const key = custom ? 'custom' : (active||'portrait');
+  const scene = custom || SCENES[key];
+  const n=+$('#n').value, model=$('#model').value;
+  const [w,h]=$('#ar').value.split('x').map(Number);
+  const out=$('#out'); out.innerHTML='';
+  for(let i=0;i<n;i++) out.appendChild(tile(scene,key,rnd(),w,h,model));
+};
+$('#q').addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&(e.metaKey||e.ctrlKey))$('#run').click();
+});
+
+/* duel */
+let cur=null;
+function duel(){
+  const keys=Object.keys(SCENES);
+  const k=keys[Math.floor(Math.random()*keys.length)];
+  const a=rnd(), b=rnd();
+  cur={k,a,b};
+  const p=$('#pair'); p.innerHTML='';
+  [['A',a],['B',b]].forEach(([lab,seed])=>{
+    const d=document.createElement('div'); d.className='pick';
+    d.innerHTML=`<div class="shot"><div class="load">rendering</div><img></div>
+                 <div class="lbl">Choose ${lab}</div>`;
+    const img=d.querySelector('img'), ld=d.querySelector('.load');
+    img.onload=()=>{img.classList.add('in');ld.remove();};
+    img.onerror=()=>{ld.textContent='failed';};
+    img.src=url(SCENES[k],seed,768,768,'flux');
+    d.onclick=()=>vote(seed,seed===a?b:a);
+    p.appendChild(d);
+  });
+}
+function vote(win,lose){
+  T.duels.push({scene:cur.k,win,lose,at:Date.now()});
+  T.scene[cur.k]=(T.scene[cur.k]||0)+1;
+  save(); duel();
+}
+$('#skip').onclick=duel;
+$('#fresh').onclick=duel;
+
+/* taste */
+function paint(){
+  const d=T.duels.length, k=T.kept.length;
+  const scenes=Object.entries(T.scene).sort((a,b)=>b[1]-a[1]);
+  $('#stats').innerHTML=`
+    <div class="stat"><div class="n">${d}</div><div class="k">Comparisons</div></div>
+    <div class="stat"><div class="n">${k}</div><div class="k">Kept</div></div>
+    <div class="stat"><div class="n">${scenes.length}</div><div class="k">Scenes rated</div></div>
+    <div class="stat"><div class="n" style="color:var(--acc)">${scenes[0]?scenes[0][0]:'—'}</div><div class="k">Most trained</div></div>`;
+
+  const board=$('#board');
+  if(!scenes.length){board.innerHTML='<div class="empty">No data yet — run a few rounds in Train.</div>';return;}
+  const max=scenes[0][1];
+  board.innerHTML=scenes.map(([n,c])=>`
+    <div class="row"><span class="nm">${n}</span>
+    <span class="bar"><i style="width:${c/max*100}%"></i></span>
+    <span class="sc">${c}</span></div>`).join('');
+}
+$('#dl').onclick=()=>{
+  const blob=new Blob([JSON.stringify(T,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download='taste.json'; a.click();
+};
+$('#wipe').onclick=()=>{
+  if(!confirm('Erase all training data?'))return;
+  T={duels:[],kept:[],scene:{}}; save(); paint();
+};
+
+$('#run').click();
+</script>
+</body>
+</html>
